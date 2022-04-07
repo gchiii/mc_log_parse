@@ -29,15 +29,15 @@ fn main() {
         .filter_map(|line| line.ok())
         .for_each(|x| {
             match msg_the_game(x.as_str()) {
-                Ok((_y,pe)) => {
-                    if players.contains_key(pe.user) {
-                        if let Some(events) = players.get_mut(pe.user) {                         
-                            events.push(pe);
+                Ok((_y,(name, event))) => {
+                    if players.contains_key(name) {
+                        if let Some(events) = players.get_mut(name) {                         
+                            events.push(event);
                         }
                     } else {
                         let mut events: Events = Vec::new();
-                        events.push(pe);
-                        players.insert(pe.user.to_string(), events);
+                        events.push(event);
+                        players.insert(String::from(name), events);
                     }
                     // println!("{:?}", y)
                 },

@@ -62,18 +62,18 @@ pub enum PlayerAction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PlayerEvent<'a> {
+pub struct PlayerEvent {
     pub action: PlayerAction,
     pub timestamp: NaiveTime,
-    pub user: &'a str,
 }
 
-impl<'a> PlayerEvent<'a> {
-    pub fn new(action: PlayerAction, timestamp: NaiveTime, user: &'a str) -> Self { Self { action, timestamp, user } }
+impl PlayerEvent {
+    pub fn new(action: PlayerAction, timestamp: NaiveTime) -> Self { Self { action, timestamp} }
 }
 
-pub type Events<'a> = Vec<PlayerEvent<'a>>;
-pub type Players<'a> = HashMap<String, Events<'a>>;
+pub type Events = Vec<PlayerEvent>;
+
+pub type Players = HashMap<String, Events>;
 
 pub fn preamble(input: &str) -> IResult<&str, Preamble> {
     match terminated(separated_pair(timestamp, space1, bracketed), tag(":"))(input) {
@@ -101,13 +101,13 @@ pub fn parse_action(input: &str) -> IResult<&str, PlayerAction> {
     alt((parse_joined, parse_left))(input)
 }
 
-pub fn msg_the_game(input: &str) -> IResult<&str, PlayerEvent> {
+pub fn msg_the_game(input: &str) -> IResult<&str, (&str, PlayerEvent)> {
     match terminated(
                 tuple((preamble, user_name, parse_action)), 
                 tag(" the game")
             )(input) {
         Ok((i, (p, user, action ))) => {
-            Ok((i, PlayerEvent{ action: action, timestamp: p.timestamp, user: user }))
+            Ok((i, (user, PlayerEvent{ action: action, timestamp: p.timestamp})))
             },
         Err(x) => Err(x),
     }
