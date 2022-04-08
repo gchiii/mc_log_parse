@@ -7,11 +7,11 @@ use nom::branch::alt;
 use nom::sequence::{separated_pair, delimited, terminated, tuple};
 use nom::IResult;
 use nom::error::{ErrorKind};
-use nom::error::ParseError;
+
 use nom::Err::Error;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
-use chrono::format::ParseError as ChronoParseError;
+// use chrono::format::ParseError as ChronoParseError;
 
 
 
@@ -33,23 +33,6 @@ pub fn user_name(input: &str) -> IResult<&str, &str> {
     delimited(space1, is_not(" "), space1)(input)
 }
 
-pub struct Session {
-    joined: NaiveTime,
-    left: NaiveTime
-}
-
-pub struct Playtime<'a> {
-    playerName: &'a str,
-    sessions: Vec<Session>
-}
-
-pub struct PlayInfo<'a> {
-    player: HashMap<String, Playtime<'a>>
-}
-
-impl<'a> PlayInfo<'a> {
-    pub fn new(player: HashMap<String, Playtime<'a>>) -> Self { Self { player } }
-}
 pub struct Preamble<'a> {
     timestamp: NaiveTime,
     label: &'a str
@@ -65,6 +48,11 @@ pub enum PlayerAction {
 pub struct PlayerEvent {
     pub action: PlayerAction,
     pub timestamp: NaiveTime,
+}
+
+pub struct Session {
+    pub start: NaiveTime,
+    pub stop: NaiveTime,
 }
 
 impl PlayerEvent {
@@ -109,7 +97,7 @@ pub fn msg_the_game(input: &str) -> IResult<&str, (&str, PlayerEvent)> {
         Ok((i, (p, user, action ))) => {
             Ok((i, (user, PlayerEvent{ action: action, timestamp: p.timestamp})))
             },
-        Err(x) => Err(x),
+        Err(x) => Err(x),   
     }
 }
 
