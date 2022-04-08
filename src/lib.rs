@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::str::{self, FromStr};
+use std::str::{self};
 use nom::bytes::complete::*;
 use nom::character::{complete::*};
 use nom::combinator::*;
@@ -10,7 +10,7 @@ use nom::error::{ErrorKind};
 
 use nom::Err::Error;
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Duration};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
 // use chrono::format::ParseError as ChronoParseError;
 
 
@@ -24,9 +24,9 @@ fn hh_mm_ss(input: &str) -> IResult<&str, &str> {
     recognize(tuple((digit1, tag(":"), digit1, tag(":"), digit1)))(input)
 }
 
-fn yyy_mm_dd(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((digit1, tag("-"), digit1, tag("-"), digit1)))(input)
-}
+// fn yyy_mm_dd(input: &str) -> IResult<&str, &str> {
+//     recognize(tuple((digit1, tag("-"), digit1, tag("-"), digit1)))(input)
+// }
 
 pub fn ts(input: &str) -> IResult<&str, &str> {
     hh_mm_ss(input)

@@ -1,10 +1,9 @@
-use chrono::{NaiveTime, NaiveDateTime, NaiveDate};
+use chrono::{NaiveDate};
 use log_parse::*;
 
-// use std::intrinsics::discriminant_value;
 use std::{fs::File, collections::HashMap};
 use std::io::{prelude::*, BufReader, self};
-use std::path::Path;
+
 use flate2::read::GzDecoder;
 use glob::glob;
 
@@ -26,7 +25,7 @@ fn main() {
             let display = path.display();
             // println!("file -> {:?}", display);
             // Open the path in read-only mode, returns `io::Result<File>`
-            let mut file = match File::open(&path) {
+            let file = match File::open(&path) {
                 Err(why) => panic!("couldn't open {}: {}", display, why),
                 Ok(file) => file,
             };
