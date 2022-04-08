@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::str;
+use std::str::{self, FromStr};
 use nom::bytes::complete::*;
 use nom::character::{complete::*};
 use nom::combinator::*;
@@ -10,7 +10,7 @@ use nom::error::{ErrorKind};
 
 use nom::Err::Error;
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Duration};
 // use chrono::format::ParseError as ChronoParseError;
 
 
@@ -22,7 +22,10 @@ pub fn bracketed(input: &str) -> IResult<&str, &str> {
 
 fn hh_mm_ss(input: &str) -> IResult<&str, &str> {
     recognize(tuple((digit1, tag(":"), digit1, tag(":"), digit1)))(input)
+}
 
+fn yyy_mm_dd(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((digit1, tag("-"), digit1, tag("-"), digit1)))(input)
 }
 
 pub fn ts(input: &str) -> IResult<&str, &str> {
@@ -47,16 +50,26 @@ pub enum PlayerAction {
 #[derive(Debug, Clone, Copy)]
 pub struct PlayerEvent {
     pub action: PlayerAction,
-    pub timestamp: NaiveTime,
+    pub timestamp: NaiveDateTime,
 }
 
 pub struct Session {
-    pub start: NaiveTime,
-    pub stop: NaiveTime,
+    pub start: Option<NaiveDateTime>,
+    pub stop: Option<NaiveDateTime>,
+}
+
+impl Session {
+    pub fn new(start: Option<NaiveDateTime>, stop: Option<NaiveDateTime>) -> Self { Self { start, stop } }
+    pub fn duration(&self) -> Option<Duration> {
+        match (self.start, self.stop) {
+            (None, None) | (None, Some(_)) | (Some(_), None) => None,
+            (Some(start), Some(stop)) => Some(stop - start),
+        }
+    }
 }
 
 impl PlayerEvent {
-    pub fn new(action: PlayerAction, timestamp: NaiveTime) -> Self { Self { action, timestamp} }
+    pub fn new(action: PlayerAction, timestamp: NaiveDateTime) -> Self { Self { action, timestamp} }
 }
 
 pub type Events = Vec<PlayerEvent>;
@@ -89,15 +102,22 @@ pub fn parse_action(input: &str) -> IResult<&str, PlayerAction> {
     alt((parse_joined, parse_left))(input)
 }
 
-pub fn msg_the_game(input: &str) -> IResult<&str, (&str, PlayerEvent)> {
+pub fn msg_the_game<'a>(input: &'a str, date: &'a mut NaiveDate) -> IResult<&'a str, (&'a str, PlayerEvent)> {
     match terminated(
                 tuple((preamble, user_name, parse_action)), 
                 tag(" the game")
             )(input) {
         Ok((i, (p, user, action ))) => {
-            Ok((i, (user, PlayerEvent{ action: action, timestamp: p.timestamp})))
+            Ok((i, (user, PlayerEvent{ action: action, timestamp: date.and_time(p.timestamp)})))
             },
         Err(x) => Err(x),   
+    }
+}
+
+pub fn parse_datelike(input: &str) -> IResult<&str, NaiveDate> {
+    match tuple((i32, tag("-"), u32, tag("-"), u32))(input) {
+        Ok((i,(year, _, month, _, day))) => Ok((i, NaiveDate::from_ymd(year, month, day))),
+        Err(e) => Err(e),
     }
 }
 
