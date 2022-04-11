@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::str::{self};
 use nom::bytes::complete::*;
 use nom::character::{complete::*};
@@ -14,8 +15,6 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
 // use chrono::format::ParseError as ChronoParseError;
 
 
-
-
 pub fn bracketed(input: &str) -> IResult<&str, &str> {
     delimited(char('['), is_not("]"), char(']'))(input)
 }
@@ -23,10 +22,6 @@ pub fn bracketed(input: &str) -> IResult<&str, &str> {
 fn hh_mm_ss(input: &str) -> IResult<&str, &str> {
     recognize(tuple((digit1, tag(":"), digit1, tag(":"), digit1)))(input)
 }
-
-// fn yyy_mm_dd(input: &str) -> IResult<&str, &str> {
-//     recognize(tuple((digit1, tag("-"), digit1, tag("-"), digit1)))(input)
-// }
 
 pub fn ts(input: &str) -> IResult<&str, &str> {
     hh_mm_ss(input)
@@ -59,9 +54,16 @@ pub struct Session {
     duration: Duration,
 }
 
+impl fmt::Display for Session {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let seconds = self.duration.num_seconds() % 60;
+        let minutes = (self.duration.num_seconds() / 60) % 60;
+        let hours = (self.duration.num_seconds() / 60) / 60;
+        write!(f, "@ {} - duration: {:02}:{:02}:{:02}", self.start.unwrap().time(), hours, minutes, seconds)
+    }
+}
 impl Session {
     pub fn new() -> Self { Self { start: None, stop: None, duration: Duration::zero() } }
-    // pub fn new(start: Option<NaiveDateTime>, stop: Option<NaiveDateTime>) -> Self { Self { start: None, stop: None, duration: Duration::zero() } }
 
     /// Set the session's start.
     pub fn set_start(&mut self, start: NaiveDateTime) {
@@ -115,6 +117,7 @@ impl PlayerData {
                     let mut session = Session::new();
                     session.set_start(start.timestamp);
                     session.set_stop(event.timestamp);
+                    self.total_time = self.total_time + session.duration();
                     self.sessions.push(session);
                 } else {
                     self.events.push(event);

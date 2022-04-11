@@ -11,27 +11,18 @@ fn main() {
 
     let mut players: Players = HashMap::new();
 
-    // let blah = "logs/2022-03-11-2.log.gz";
-    // println!("{:?}", parse_datelike(blah));
 
     for entry in glob("./logs/*.log.gz").expect("no files") {
         if let Ok(path) = entry {
             let fname = path.file_name().unwrap();
-            // let mut date = NaiveDate::from_ymd(2022, 1, 1);
             let (_, mut date) = parse_datelike(fname.to_str().unwrap()).unwrap();
-            // if let Some(fname) = path.file_name() {
-                // Ok(x,date) = parse_datelike(fname.to_str().unwrap());
-            // }
             let display = path.display();
-            // println!("file -> {:?}", display);
-            // Open the path in read-only mode, returns `io::Result<File>`
             let file = match File::open(&path) {
                 Err(why) => panic!("couldn't open {}: {}", display, why),
                 Ok(file) => file,
             };
         
             let mut reader = BufReader::new(GzDecoder::new(file));
-            // let date: NaiveDateTime = NaiveDateTime
             
             extract_player_data(&mut players, &mut reader, &mut date).unwrap();
         } else {
@@ -45,10 +36,7 @@ fn main() {
         let mut day:Option<NaiveDate> = None;
         for event in events {
             if session.duration().is_zero() == false {                
-                let seconds = session.duration().num_seconds() % 60;
-                let minutes = (session.duration().num_seconds() / 60) % 60;
-                let hours = (session.duration().num_seconds() / 60) / 60;
-                println!("\tduration: {:02}:{:02}:{:02}", hours, minutes, seconds);
+                println!("    {}", session);
                 session.clear();
             }
             if day != Some(event.timestamp.date()) {
@@ -82,7 +70,6 @@ fn extract_player_data<R: BufRead>(players: &mut Players, reader: &mut R, date: 
                     events.push(event);
                     players.insert(String::from(name), events);
                 }
-                // println!("{:?}", y)
             },
             _ => (),
         }
