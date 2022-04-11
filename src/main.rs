@@ -40,25 +40,28 @@ fn main() {
     }    
 
     for (user, events) in &players {
-        println!("{}", user);
-        let mut session = Session::new(None, None);
+        println!("{}:", user);
+        let mut session = Session::new();
+        let mut day:Option<NaiveDate> = None;
         for event in events {
+            if session.duration().is_zero() == false {                
+                let seconds = session.duration().num_seconds() % 60;
+                let minutes = (session.duration().num_seconds() / 60) % 60;
+                let hours = (session.duration().num_seconds() / 60) / 60;
+                println!("\tduration: {:02}:{:02}:{:02}", hours, minutes, seconds);
+                session.clear();
+            }
+            if day != Some(event.timestamp.date()) {
+                day = Some(event.timestamp.date());
+                println!("   {:?}", day.unwrap());
+            }
             match event.action {
                 PlayerAction::Joined => {
-                    session.start = Some(event.timestamp);
+                    session.set_start(event.timestamp);
                 },
                 PlayerAction::Left => {
-                    session.stop = Some(event.timestamp);
+                    session.set_stop(event.timestamp);
                 },
-            }
-            if let Some(duration) = session.duration() {                
-                let seconds = duration.num_seconds() % 60;
-                let minutes = (duration.num_seconds() / 60) % 60;
-                let hours = (duration.num_seconds() / 60) / 60;
-                println!("\tduration: {}:{}:{}", hours, minutes, seconds);
-                // println!("\tduration: {:?}", duration.num_minutes());
-                session.start = None;
-                session.stop = None;
             }
         }
     }        

@@ -56,15 +56,37 @@ pub struct PlayerEvent {
 pub struct Session {
     pub start: Option<NaiveDateTime>,
     pub stop: Option<NaiveDateTime>,
+    duration: Duration,
 }
 
 impl Session {
-    pub fn new(start: Option<NaiveDateTime>, stop: Option<NaiveDateTime>) -> Self { Self { start, stop } }
-    pub fn duration(&self) -> Option<Duration> {
-        match (self.start, self.stop) {
-            (None, None) | (None, Some(_)) | (Some(_), None) => None,
-            (Some(start), Some(stop)) => Some(stop - start),
+    pub fn new() -> Self { Self { start: None, stop: None, duration: Duration::zero() } }
+    // pub fn new(start: Option<NaiveDateTime>, stop: Option<NaiveDateTime>) -> Self { Self { start: None, stop: None, duration: Duration::zero() } }
+
+    /// Set the session's start.
+    pub fn set_start(&mut self, start: NaiveDateTime) {
+        self.start = Some(start);
+    }
+
+    /// Set the session's stop.
+    pub fn set_stop(&mut self, stop: NaiveDateTime) {
+        self.stop = Some(stop);
+        if let Some(start) = self.start {
+            self.duration = stop - start;
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.stop = None;
+        self.start = None;
+        self.duration = Duration::zero();
+    }
+
+
+    /// Get the session's duration.
+    #[must_use]
+    pub fn duration(&self) -> Duration {
+        self.duration
     }
 }
 
@@ -75,6 +97,32 @@ impl PlayerEvent {
 pub type Events = Vec<PlayerEvent>;
 
 pub type Players = HashMap<String, Events>;
+pub struct PlayerData {
+    pub sessions: Vec<Session>,
+    pub events: Events,
+    total_time: Duration,
+}
+
+impl PlayerData {
+    pub fn new(sessions: Vec<Session>, events: Events, total_time: Duration) -> Self { Self { sessions: Vec::new(), events: Events::new(), total_time: Duration::zero() } }
+
+    /// Set the player data's events.
+    pub fn add_event(&mut self, event: PlayerEvent) {
+        match event.action {
+            PlayerAction::Joined => self.events.push(event),
+            PlayerAction::Left => {
+                if let Some(start) = self.events.pop() {
+                    let mut session = Session::new();
+                    session.set_start(start.timestamp);
+                    session.set_stop(event.timestamp);
+                    self.sessions.push(session);
+                } else {
+                    self.events.push(event);
+                }
+            },
+        }
+    }
+}
 
 pub fn preamble(input: &str) -> IResult<&str, Preamble> {
     match terminated(separated_pair(timestamp, space1, bracketed), tag(":"))(input) {
@@ -85,13 +133,13 @@ pub fn preamble(input: &str) -> IResult<&str, Preamble> {
     }
 }
 
-pub fn parse_joined(input: &str) -> IResult<&str, PlayerAction> {
+fn parse_joined(input: &str) -> IResult<&str, PlayerAction> {
     match tag("joined")(input) {
         Ok((i, _)) => Ok((i,PlayerAction::Joined)),
         Err(x) => Err(x),
     }
 }
-pub fn parse_left(input: &str) -> IResult<&str, PlayerAction> {
+fn parse_left(input: &str) -> IResult<&str, PlayerAction> {
     match tag("left")(input) {
         Ok((i, _)) => Ok((i,PlayerAction::Left)),
         Err(x) => Err(x),
