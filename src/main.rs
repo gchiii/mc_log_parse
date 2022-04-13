@@ -30,45 +30,33 @@ fn main() {
         };
     }    
 
-    for (user, events) in &players {
-        println!("{}:", user);
-        let mut session = Session::new();
-        let mut day:Option<NaiveDate> = None;
-        for event in events {
-            if session.duration().is_zero() == false {                
-                println!("    {}", session);
-                session.clear();
-            }
-            if day != Some(event.timestamp.date()) {
-                day = Some(event.timestamp.date());
-                println!("   {:?}", day.unwrap());
-            }
-            match event.action {
-                PlayerAction::Joined => {
-                    session.set_start(event.timestamp);
-                },
-                PlayerAction::Left => {
-                    session.set_stop(event.timestamp);
-                },
+    for (user, player_data) in &players {
+        println!("{}: total time = {}", user, duration_hhmmss(player_data.total_time()));
+        
+        for day in &player_data.days {
+            println!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
+            let y = &player_data.sessions[day.range()];
+            for session in y {
+                println!("      {}", session);
             }
         }
-    }        
+    }
 }
 
 fn extract_player_data<R: BufRead>(players: &mut Players, reader: &mut R, date: &mut NaiveDate) -> io::Result<()> {
     reader.lines()
     .filter_map(|line| line.ok())
     .for_each(|x| 
-        match msg_the_game(x.as_str(), date) {
+        match parse_event(x.as_str(), date) {
             Ok((_y,(name, event))) => {
                 if players.contains_key(name) {
-                    if let Some(events) = players.get_mut(name) {                         
-                        events.push(event);
+                    if let Some(player_data) = players.get_mut(name) {
+                        player_data.add_event(event);
                     }
                 } else {
-                    let mut events: Events = Vec::new();
-                    events.push(event);
-                    players.insert(String::from(name), events);
+                    let mut player_data = PlayerData::new();
+                    player_data.add_event(event);
+                    players.insert(String::from(name), player_data);
                 }
             },
             _ => (),
