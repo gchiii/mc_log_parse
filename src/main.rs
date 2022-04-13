@@ -9,15 +9,24 @@ use std::io::{prelude::*, BufReader, self};
 use flate2::read::GzDecoder;
 use glob::glob;
 
+use clap::Parser;
 
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(parse(from_os_str), default_value = "./logs")]
+    log_path: std::path::PathBuf,
+}
 
 fn main() {
-
+    let args = Args::parse();
     let mut players: Players = HashMap::new();
 
+    println!("{:?}", args);
 
-    for entry in glob("./logs/*.log*").expect("no files") {
+    let pattern : PathBuf = [args.log_path.to_str().unwrap(), "*.log*"].iter().collect();
+    for entry in glob(pattern.to_str().unwrap()).expect("no files") {
         if let Ok(path) = entry {
             let mut date = extract_date_from_path(&path);            
             
