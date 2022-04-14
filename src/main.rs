@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 use glob::glob;
 
 use clap::Parser;
-
+use ansi_term::Color;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -22,8 +22,6 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let mut players: Players = HashMap::new();
-
-    println!("{:?}", args);
 
     let pattern : PathBuf = [args.log_path.to_str().unwrap(), "*.log*"].iter().collect();
     for entry in glob(pattern.to_str().unwrap()).expect("no files") {
@@ -44,10 +42,13 @@ fn main() {
     }    
 
     for (user, player_data) in &players {
-        println!("{}: total time = {}", user, duration_hhmmss(player_data.total_time()));
+        let user_total = format!("total time = {}", duration_hhmmss(player_data.total_time()));
+        let user_disp = format!("{}:", user);
+        println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
         
         for day in &player_data.days {
-            println!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
+            let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
+            println!("{}", Color::Green.paint(daily_total));
             let y = &player_data.sessions[day.range()];
             for session in y {
                 println!("      {}", session);
