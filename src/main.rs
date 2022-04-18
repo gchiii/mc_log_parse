@@ -10,7 +10,8 @@ use flate2::read::GzDecoder;
 use glob::glob;
 
 use clap::Parser;
-use ansi_term::Color;
+// use ansi_term::Color;
+
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -19,9 +20,11 @@ struct Args {
     log_path: std::path::PathBuf,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
-    let mut players: Players = HashMap::new();
+    // let mut players: Players = HashMap::new();
+    let mut game_info = GameInfo::new();
 
     let pattern : PathBuf = [args.log_path.to_str().unwrap(), "*.log*"].iter().collect();
     for entry in glob(pattern.to_str().unwrap()).expect("no files") {
@@ -35,26 +38,15 @@ fn main() {
             };
 
             let mut reader = get_reader(path.extension().unwrap() == "gz", file);
-            extract_player_data(&mut players, &mut reader, &mut date).unwrap();
+            let pdata = extract_player_data(&mut reader, &mut date);
+            for (_name, event) in pdata {
+                game_info.add_event(event);
+            }
         } else {
             todo!()
         };
     }    
-
-    for (user, player_data) in &players {
-        let user_total = format!("total time = {}", duration_hhmmss(player_data.total_time()));
-        let user_disp = format!("{}:", user);
-        println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
-        
-        for day in &player_data.days {
-            let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
-            println!("{}", Color::Green.paint(daily_total));
-            let y = &player_data.sessions[day.range()];
-            for session in y {
-                println!("      {}", session);
-            }
-        }
-    }
+    game_info.print_players();
 }
 
 fn extract_date_from_path(path: &PathBuf) -> NaiveDate{
@@ -90,24 +82,18 @@ fn get_reader(gz: bool, file: File) -> Box<dyn BufRead> {
 
 }
 
-fn extract_player_data<R: BufRead>(players: &mut Players, reader: &mut R, date: &mut NaiveDate) -> io::Result<()> {
+
+fn extract_player_data<R: BufRead>(reader: &mut R, date: &mut NaiveDate) -> Vec<(String, PlayerEvent)> {
+    let mut pdata = Vec::<(String, PlayerEvent)>::new();
     reader.lines()
     .filter_map(|line| line.ok())
     .for_each(|x| 
         match parse_event(x.as_str(), date) {
             Ok((_y,(name, event))) => {
-                if players.contains_key(name) {
-                    if let Some(player_data) = players.get_mut(name) {
-                        player_data.add_event(event);
-                    }
-                } else {
-                    let mut player_data = PlayerData::new();
-                    player_data.add_event(event);
-                    players.insert(String::from(name), player_data);
-                }
+                pdata.push((name.to_string(), event));
             },
             _ => (),
         }
     );
-    Ok(())
+    pdata
 }

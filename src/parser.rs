@@ -23,14 +23,15 @@ pub enum PlayerAction {
 }
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PlayerEvent {
+    pub name: String,
     pub action: PlayerAction,
     pub timestamp: NaiveDateTime,
 }
 
 impl PlayerEvent {
-    pub fn new(action: PlayerAction, timestamp: NaiveDateTime) -> Self { Self { action, timestamp} }
+    pub fn new(name: String, action: PlayerAction, timestamp: NaiveDateTime) -> Self { Self { action, timestamp, name } }
 }
 
 pub fn bracketed(input: &str) -> IResult<&str, &str> {
@@ -83,7 +84,7 @@ pub fn parse_event<'a>(input: &'a str, date: &'a mut NaiveDate) -> IResult<&'a s
                 tag(" the game")
             )(input) {
         Ok((i, (p, user, action ))) => {
-            Ok((i, (user, PlayerEvent{ action: action, timestamp: date.and_time(p.timestamp)})))
+            Ok((i, (user, PlayerEvent{name: user.to_string(),  action: action, timestamp: date.and_time(p.timestamp)})))
         },
         Err(x) => Err(x),   
     }
