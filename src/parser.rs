@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use nom::bytes::complete::*;
 use nom::character::{complete::*};
 use nom::combinator::*;
@@ -16,7 +18,7 @@ pub struct LogHeader<'a> {
     _tag: &'a str
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlayerAction {
     Joined,
     Left,
@@ -33,6 +35,30 @@ pub struct PlayerEvent {
 impl PlayerEvent {
     pub fn new(name: String, action: PlayerAction, timestamp: NaiveDateTime) -> Self { Self { action, timestamp, name } }
 }
+
+impl PartialEq for PlayerEvent {
+
+    fn ne(&self, other: &Self) -> bool {
+        self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
+    }
+
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
+    }
+}
+impl Eq for PlayerEvent {}
+
+impl Ord for PlayerEvent {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.timestamp.cmp(&other.timestamp)
+    }
+}
+impl PartialOrd for PlayerEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.timestamp.cmp(&other.timestamp))
+    }
+}
+
 
 pub fn bracketed(input: &str) -> IResult<&str, &str> {
     delimited(char('['), is_not("]"), char(']'))(input)
@@ -78,7 +104,7 @@ pub fn parse_action(input: &str) -> IResult<&str, PlayerAction> {
 }
 
 
-pub fn parse_event<'a>(input: &'a str, date: &'a mut NaiveDate) -> IResult<&'a str, (&'a str, PlayerEvent)> {
+pub fn parse_event<'a>(input: &'a str, date: &'a NaiveDate) -> IResult<&'a str, (&'a str, PlayerEvent)> {
     match terminated(
                 tuple((parse_log_header, user_name, parse_action)), 
                 tag(" the game")

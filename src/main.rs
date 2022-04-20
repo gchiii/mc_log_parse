@@ -1,4 +1,5 @@
 use chrono::{NaiveDate, DateTime, Utc};
+use flume::Sender;
 use log_parse::*;
 
 
@@ -28,27 +29,40 @@ async fn main() {
     // let mut players: Players = HashMap::new();
     let mut game_info = GameInfo::new();
 
+    let mut handles = Vec::new();
     let pattern : PathBuf = [args.log_path.to_str().unwrap(), "*.log*"].iter().collect();
     for entry in glob(pattern.to_str().unwrap()).expect("no files") {
         if let Ok(path) = entry {
-            let mut date = extract_date_from_path(&path);            
-            
-            let display = path.display();
-            let file = match File::open(&path) {
-                Err(why) => panic!("couldn't open {}: {}", display, why),
-                Ok(file) => file,
-            };
-
-            let mut reader = get_reader(path.extension().unwrap() == "gz", file);
-            let pdata = extract_player_data(&mut reader, &mut date);
-            for (_name, event) in pdata {
-                game_info.tx.send_async(event).await;
-            }
+            let tx = game_info.tx.clone();
+            handles.push(tokio::spawn(async move {
+                do_the_thing(path, tx).await;
+            }));
         } else {
             todo!()
         };
     }    
+    futures::future::join_all(handles).await;
+
     game_info.print();
+}
+
+
+async fn do_the_thing(path: PathBuf, tx: Sender<PlayerEvent>) {
+    let date = extract_date_from_path(&path);            
+            
+    let display = path.display();
+    let file = match File::open(&path) {
+        Err(why) => panic!("couldn't open {}: {}", display, why),
+        Ok(file) => file,
+    };
+
+    let pdata = {
+        let reader = get_reader(path.extension().unwrap() == "gz", file);
+        extract_player_data(reader, date)
+    };
+    for (_name, event) in pdata {
+        tx.send_async(event).await;
+    }
 }
 
 fn extract_date_from_path(path: &PathBuf) -> NaiveDate{
@@ -85,12 +99,12 @@ fn get_reader(gz: bool, file: File) -> Box<dyn BufRead> {
 }
 
 
-fn extract_player_data<R: BufRead>(reader: &mut R, date: &mut NaiveDate) -> Vec<(String, PlayerEvent)> {
+fn extract_player_data<R: BufRead>(reader: R, date: NaiveDate) -> Vec<(String, PlayerEvent)> {
     let mut pdata = Vec::<(String, PlayerEvent)>::new();
     reader.lines()
     .filter_map(|line| line.ok())
     .for_each(|x| 
-        match parse_event(x.as_str(), date) {
+        match parse_event(x.as_str(), &date) {
             Ok((_y,(name, event))) => {
                 pdata.push((name.to_string(), event));
             },

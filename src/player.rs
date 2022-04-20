@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::ops::Range;
 use std::str::{self};
@@ -87,6 +87,7 @@ impl PlayerDay {
 
 #[derive(Debug, Clone)]
 pub struct PlayerData {
+    name: String,
     pub sessions: Vec<Session>,
     pub events: Events,
     pub days: Vec<PlayerDay>,
@@ -94,7 +95,8 @@ pub struct PlayerData {
 }
 
 impl PlayerData {
-    pub fn new() -> Self { Self { 
+    pub fn new(name: String) -> Self { Self { 
+        name: name,
         sessions: Vec::new(), 
         events: Events::new(), 
         days: Vec::<PlayerDay>::new(), 
@@ -118,19 +120,33 @@ impl PlayerData {
         self.sessions.push(session);
     }
 
-    /// Set the player data's events.
-    pub fn add_event(&mut self, event: PlayerEvent) {
-        match event.action {
-            PlayerAction::Joined => self.events.push(event),
-            PlayerAction::Left => {
-                if let Some(start) = self.events.pop() {
-                    let session: Session = Session::build(&start, &event);
+    pub fn process_events(&mut self) {        
+        self.events.sort();
+        self.events.dedup();
+    
+        if self.events.len() >= 2 {
+            let mut unused_events = Events::new();
+            while self.events.len() > 0 {
+                if self.events[0].action == PlayerAction::Joined && self.events[1].action == PlayerAction::Left {
+                    let a = self.events.remove(0);
+                    let b = self.events.remove(0);
+                    // println!("{:?} **** {:?}", a.timestamp, b.timestamp);
+                    let session: Session = Session::build(&a, &b);
                     self.add_session(session);
                 } else {
-                    self.events.push(event);
+                    unused_events.push(self.events.remove(0));
                 }
-            },
+            }
+            self.events = unused_events;
+            // for (i, x) in self.events.iter().enumerate() {
+            //     println!("i={} {:?}", i, x);
+            // }
         }
+        
+    }
+    /// Set the player data's events.
+    pub fn add_event(&mut self, event: PlayerEvent) {
+        self.events.push(event);
     }
 
     /// Get the player data's total time.
@@ -138,6 +154,23 @@ impl PlayerData {
     pub fn total_time(&self) -> Duration {
         self.total_time
     }
+
+    pub fn print(mut self) {
+        self.process_events();
+        let user_total = format!("total time = {}", duration_hhmmss(self.total_time()));
+        let user_disp = format!("{}:", self.name);
+        println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
+        
+        for day in &self.days {
+            let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
+            println!("{}", Color::Green.paint(daily_total));
+            // let y = &self.sessions[day.range()];
+            // for session in y {
+            //     println!("      {}", session);
+            // }
+        }
+}
+
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +185,7 @@ impl Player {
         let (tx, rx) = flume::unbounded();
 
         let player = Self { 
-            pdata: Arc::new(RwLock::new(PlayerData::new())), 
+            pdata: Arc::new(RwLock::new(PlayerData::new(name.clone()))), 
             name: name,
             tx: tx,
         };
@@ -186,8 +219,9 @@ impl Player {
     }
 
     pub fn print(self) {
-        match self.pdata.read() {
-            Ok(data) => {
+        match self.pdata.write() {
+            Ok(mut data) => {
+                data.process_events();
                 let user_total = format!("total time = {}", duration_hhmmss(data.total_time()));
                 let user_disp = format!("{}:", self.name());
                 println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
@@ -195,15 +229,21 @@ impl Player {
                 for day in &data.days {
                     let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
                     println!("{}", Color::Green.paint(daily_total));
-                    let y = &data.sessions[day.range()];
-                    for session in y {
-                        println!("      {}", session);
-                    }
+                    // let y = &data.sessions[day.range()];
+                    // for session in y {
+                    //     println!("      {}", session);
+                    // }
                 }
-    
             },
             Err(_) => todo!(),
         }
+
+        // match self.pdata.read() {
+        //     Ok(data) => {
+    
+        //     },
+        //     Err(_) => todo!(),
+        // }
     }
 
 
