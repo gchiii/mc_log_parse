@@ -2,11 +2,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Range;
 use std::str::{self};
+use std::sync::{Mutex, Arc, RwLock};
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
 
 use ansi_term::Color;
 use flume::{Receiver, Sender};
+use futures::sink::Send;
+
 
 use crate::parser::*;
 
@@ -15,17 +18,6 @@ use flume;
 pub type Events = Vec<PlayerEvent>;
 
 
-// pub enum MCPlayerEvent {
-//     Joined {name: String, timestamp: NaiveDateTime},
-//     Left {name: String, timestamp: NaiveDateTime},
-//     Unknown,
-// }
-
-// impl MCPlayerEvent {
-//     pub fn new() -> MCPlayerEvent {MCPlayerEvent::Unknown}
-
-
-// }
 
 
 #[derive(Debug, Clone, Copy)]
@@ -45,6 +37,8 @@ impl fmt::Display for Session {
 }
 
 impl Session {
+    pub fn new(start: NaiveDateTime, stop: NaiveDateTime, duration: Duration) -> Self { Self { start, stop, duration } }
+
     pub fn build(joined: &PlayerEvent, left: &PlayerEvent) -> Session {
         Session { start: joined.timestamp, stop: left.timestamp, duration: left.timestamp - joined.timestamp }
     }
@@ -119,7 +113,7 @@ impl PlayerData {
                     self.days.push(PlayerDay::new(&session, first_index));
                 }
             }
-        }
+        }        
         self.total_time = self.total_time + session.duration();
         self.sessions.push(session);
     }
@@ -146,56 +140,121 @@ impl PlayerData {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Player {
+    pdata: Arc<RwLock<PlayerData>>,
+    name: String,
+    tx: Sender<PlayerEvent>,
+}
+
+impl Player {
+    pub fn new(name: String) -> Self { 
+        let (tx, rx) = flume::unbounded();
+
+        let player = Self { 
+            pdata: Arc::new(RwLock::new(PlayerData::new())), 
+            name: name,
+            tx: tx,
+        };
+
+        let mut p = player.clone();
+        tokio::spawn(async move {
+            while let Ok(event) =  rx.recv_async().await {
+                p.add_event(event);
+            }
+        });
+        player
+    }
+
+    /// Get the player data's total time.
+    pub fn total_time(&self) -> Duration {
+        self.pdata.read().unwrap().total_time()
+    }
+
+    pub async fn send_event(&mut self, event: PlayerEvent) -> Result<(), flume::SendError<PlayerEvent>> {
+        self.tx.send_async(event).await
+    }
+
+    /// Set the player data's events.
+    fn add_event(&mut self, event: PlayerEvent) {
+        match self.pdata.write() {
+            Ok(mut pdata) => {
+                pdata.add_event(event)
+            },
+            Err(_) => todo!(),
+        }
+    }
+
+    pub fn print(self) {
+        match self.pdata.read() {
+            Ok(data) => {
+                let user_total = format!("total time = {}", duration_hhmmss(data.total_time()));
+                let user_disp = format!("{}:", self.name());
+                println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
+                
+                for day in &data.days {
+                    let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
+                    println!("{}", Color::Green.paint(daily_total));
+                    let y = &data.sessions[day.range()];
+                    for session in y {
+                        println!("      {}", session);
+                    }
+                }
+    
+            },
+            Err(_) => todo!(),
+        }
+    }
+
+
+    /// Get a reference to the player's name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+}
+
 pub type Players = HashMap<String, PlayerData>;
 
 #[derive(Debug, Clone)]
 pub struct GameInfo {
-    pub players: Players,
+    pub players: Arc<RwLock<HashMap<String, Player>>>,
     pub tx: Sender<PlayerEvent>,
-    rx: Receiver<PlayerEvent>,
 }
 
 impl GameInfo {
     pub fn new() -> Self { 
         let (tx, rx) = flume::unbounded();
-        Self { players: Players::new(), tx: tx, rx: rx } 
-    }
-
-    pub fn add_event(&mut self, event: PlayerEvent) {
-        let player_data = self.players.entry(event.name.clone()).or_insert(PlayerData::new());
-        player_data.add_event(event);
-    }
-
-    pub fn print_players(self) {
-        for (user, player_data) in &self.players {
-            let user_total = format!("total time = {}", duration_hhmmss(player_data.total_time()));
-            let user_disp = format!("{}:", user);
-            println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
-            
-            for day in &player_data.days {
-                let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
-                println!("{}", Color::Green.paint(daily_total));
-                let y = &player_data.sessions[day.range()];
-                for session in y {
-                    println!("      {}", session);
+        let info = Self { 
+            players: Arc::new(RwLock::new(HashMap::<String, Player>::new())), 
+            tx: tx,
+        };
+        let mut game_info = info.clone();
+        tokio::spawn(async move {
+            while let Ok(event) = rx.recv_async().await {
+                match game_info.players.write() {
+                    Ok(mut players) => {
+                        let player_data = players.entry(event.name.clone()).or_insert(Player::new(event.name.clone()));
+                        let p = player_data.clone();
+                        p.tx.send(event);
+                    }
+                    _ => (),
                 }
             }
-        }
-    
+        });
+        info
     }
 
-    pub async fn rx_thing(mut self) {
-        loop {
-            tokio::select! {
-                details = self.rx.recv_async() => match details {
-                    Ok(event) => {
-                        self.add_event(event);
-                    },
-                    Err(_) => todo!(),
-                }
-
-            }
+    pub fn print(self) {
+        match self.players.read() {
+            Ok(players) => {
+                players.clone().into_values().for_each(|player| {
+                    player.print();
+                });
+            },
+            Err(_) => todo!(),
         }
     }
+
 }
 

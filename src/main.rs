@@ -12,6 +12,8 @@ use glob::glob;
 use clap::Parser;
 // use ansi_term::Color;
 
+use tokio;
+
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -40,13 +42,13 @@ async fn main() {
             let mut reader = get_reader(path.extension().unwrap() == "gz", file);
             let pdata = extract_player_data(&mut reader, &mut date);
             for (_name, event) in pdata {
-                game_info.add_event(event);
+                game_info.tx.send_async(event).await;
             }
         } else {
             todo!()
         };
     }    
-    game_info.print_players();
+    game_info.print();
 }
 
 fn extract_date_from_path(path: &PathBuf) -> NaiveDate{
