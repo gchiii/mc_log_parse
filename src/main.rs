@@ -3,14 +3,13 @@ use log_parse::*;
 
 
 use std::path::PathBuf;
-use std::{fs::File, collections::HashMap};
-use std::io::{prelude::*, BufReader, self};
+use std::{fs::File};
+use std::io::{prelude::*, BufReader};
 
 use flate2::read::GzDecoder;
 use glob::glob;
 
 use clap::Parser;
-// use ansi_term::Color;
 
 
 #[derive(Parser, Debug)]

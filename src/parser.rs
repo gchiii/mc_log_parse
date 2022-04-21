@@ -9,7 +9,7 @@ use nom::error::{ErrorKind};
 
 use nom::Err::Error;
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 
 pub struct LogHeader<'a> {
@@ -47,14 +47,6 @@ impl PartialEq for PlayerEvent {
 
 impl PartialOrd for PlayerEvent {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // match self.name.partial_cmp(&other.name) {
-        //     Some(core::cmp::Ordering::Equal) => {}
-        //     ord => return ord,
-        // }
-        // match self.action.partial_cmp(&other.action) {
-        //     Some(core::cmp::Ordering::Equal) => {}
-        //     ord => return ord,
-        // }
         self.timestamp.partial_cmp(&other.timestamp)
     }
 }

@@ -1,17 +1,10 @@
-use std::collections::{HashMap, BinaryHeap};
-use std::fmt::{self, Binary};
-use std::ops::Range;
+use std::collections::{HashMap};
+use std::fmt::{self};
 use std::str::{self};
-
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
-
+use chrono::{NaiveDate, NaiveDateTime, Duration};
 use ansi_term::Color;
-use flume::{Receiver, Sender};
-use tokio::task::JoinHandle;
-
 use crate::parser::*;
 
-use flume;
 
 pub type Events = Vec<PlayerEvent>;
 
@@ -128,14 +121,14 @@ impl PlayerData {
     }
 
     fn add_day(&mut self, date: NaiveDate) {
-        let mut day = PlayerDay::new(date);
+        let day = PlayerDay::new(date);
         self.days.push(day);
     }
 
     fn add_session(&mut self, session: Session) {
         let date = session.start.date();
 
-        let mut day = {
+        let day = {
             if self.days.is_empty() {
                 self.add_day(date)
             }
@@ -146,7 +139,10 @@ impl PlayerData {
             self.days.last_mut().expect("msg")
         };
         self.total_time = self.total_time + session.duration();
-        day.add_session(session);
+        match day.add_session(session) {
+            Ok(_) => todo!(),
+            Err(_) => todo!(),
+        }
     }
 
     /// Set the player data's events.
@@ -170,9 +166,9 @@ impl PlayerData {
         self.total_time
     }
 
-    pub fn print(&self, user: &str) {
+    pub fn print(&self) {
         let user_total = format!("total time = {}", duration_hhmmss(self.total_time()));
-        let user_disp = format!("{}:", user);
+        let user_disp = format!("{}:", self.name);
         println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
         
         for day in &self.days {
@@ -202,8 +198,8 @@ impl GameInfo {
     }
 
     pub fn print_players(self) {
-        for (user, player_data) in &self.players {
-            player_data.print(user);
+        for (_user, player_data) in &self.players {
+            player_data.print();
         }    
     }
 }
