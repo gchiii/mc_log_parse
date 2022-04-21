@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use nom::bytes::complete::*;
 use nom::character::{complete::*};
 use nom::combinator::*;
@@ -16,7 +17,7 @@ pub struct LogHeader<'a> {
     _tag: &'a str
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlayerAction {
     Joined,
     Left,
@@ -34,6 +35,37 @@ impl PlayerEvent {
     pub fn new(name: String, action: PlayerAction, timestamp: NaiveDateTime) -> Self { Self { action, timestamp, name } }
 }
 
+impl PartialEq for PlayerEvent {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
+    }
+}
+
+impl PartialOrd for PlayerEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        // match self.name.partial_cmp(&other.name) {
+        //     Some(core::cmp::Ordering::Equal) => {}
+        //     ord => return ord,
+        // }
+        // match self.action.partial_cmp(&other.action) {
+        //     Some(core::cmp::Ordering::Equal) => {}
+        //     ord => return ord,
+        // }
+        self.timestamp.partial_cmp(&other.timestamp)
+    }
+}
+
+impl Eq for PlayerEvent {}
+
+impl Ord for PlayerEvent {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.timestamp.cmp(&other.timestamp)
+    }
+}
 pub fn bracketed(input: &str) -> IResult<&str, &str> {
     delimited(char('['), is_not("]"), char(']'))(input)
 }

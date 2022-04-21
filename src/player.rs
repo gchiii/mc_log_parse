@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::fmt;
+use std::collections::{HashMap, BinaryHeap};
+use std::fmt::{self, Binary};
 use std::ops::Range;
 use std::str::{self};
 
@@ -7,25 +7,13 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Duration};
 
 use ansi_term::Color;
 use flume::{Receiver, Sender};
+use tokio::task::JoinHandle;
 
 use crate::parser::*;
 
 use flume;
 
 pub type Events = Vec<PlayerEvent>;
-
-
-// pub enum MCPlayerEvent {
-//     Joined {name: String, timestamp: NaiveDateTime},
-//     Left {name: String, timestamp: NaiveDateTime},
-//     Unknown,
-// }
-
-// impl MCPlayerEvent {
-//     pub fn new() -> MCPlayerEvent {MCPlayerEvent::Unknown}
-
-
-// }
 
 
 #[derive(Debug, Clone, Copy)]
@@ -63,65 +51,102 @@ pub fn duration_hhmmss(duration: Duration) -> String {
     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PlayerDay {
-    pub date: NaiveDate,
-    first_index: usize, 
-    last_index: usize,
-    pub total_time: Duration,
+    date: NaiveDate,
+    sessions: Vec<Session>,
+    total_time: Duration,
 }
 
 impl PlayerDay {
-    pub fn new(session: &Session, index: usize) -> Self { 
+    pub fn new(date: NaiveDate) -> Self { 
         Self { 
-            date: session.start.date(),
-            first_index: index,
-            last_index: index+1, 
-            total_time: session.duration(),
+            date: date,
+            sessions: Vec::<Session>::new(), 
+            total_time: Duration::zero(),
         } 
     }
 
-    pub fn add_session(&mut self, session: &Session) {
-        self.last_index += 1;
-        self.total_time = self.total_time + session.duration;
+    pub fn add_session(&mut self, session: Session) -> Result<(), Session> {
+        if self.date == session.start.date() {
+            self.total_time = self.total_time + session.duration();
+            self.sessions.push(session);
+            Ok(())
+        } else {
+            Err(session)
+        }
     }
 
-    pub fn range(self) -> Range<usize> {
-        Range { start: self.first_index, end: self.last_index }
+    pub fn print_day_total(&self) {
+        let daily_total = format!("  {} - daily total = {}", self.date, duration_hhmmss(self.total_time));
+        let thing = Color::Green.paint(daily_total);
+        println!("{}", thing);        
+    }
+
+    pub fn print_day_sessions(&self) {
+        for session in &self.sessions {
+            println!("      {}", session);
+        }
+    }
+}
+
+impl PartialEq for PlayerDay {
+    fn eq(&self, other: &Self) -> bool {
+        self.date == other.date
+    }
+}
+
+impl Eq for PlayerDay {}
+impl Ord for PlayerDay {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.date.cmp(&other.date)
+    }
+}
+
+impl PartialOrd for PlayerDay {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.date.partial_cmp(&other.date)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PlayerData {
-    pub sessions: Vec<Session>,
+    name: String,
     pub events: Events,
     pub days: Vec<PlayerDay>,
     pub total_time: Duration,
 }
 
 impl PlayerData {
-    pub fn new() -> Self { Self { 
-        sessions: Vec::new(), 
-        events: Events::new(), 
-        days: Vec::<PlayerDay>::new(), 
-        total_time: Duration::zero() 
-    } }
+    pub fn new(name: &str) -> Self { 
+        Self { 
+            name: name.to_string(),
+            events: Events::new(), 
+            days: Vec::new(), 
+            total_time: Duration::zero(),
+        } 
+    }
+
+    fn add_day(&mut self, date: NaiveDate) {
+        let mut day = PlayerDay::new(date);
+        self.days.push(day);
+    }
 
     fn add_session(&mut self, session: Session) {
-        let first_index = self.sessions.len();
-        if self.days.is_empty() {
-            self.days.push(PlayerDay::new(&session, first_index));
-        } else {
-            if let Some(d) = self.days.last_mut() {
-                if d.date == session.start.date() {
-                    d.add_session(&session);
-                } else {
-                    self.days.push(PlayerDay::new(&session, first_index));
-                }
+        let date = session.start.date();
+
+        let mut day = {
+            if self.days.is_empty() {
+                self.add_day(date)
             }
-        }
+    
+            if self.days.last().expect("wow, where is it").date < date {
+                self.add_day(date)
+            }
+            self.days.last_mut().expect("msg")
+        };
         self.total_time = self.total_time + session.duration();
-        self.sessions.push(session);
+        day.add_session(session);
     }
 
     /// Set the player data's events.
@@ -144,6 +169,17 @@ impl PlayerData {
     pub fn total_time(&self) -> Duration {
         self.total_time
     }
+
+    pub fn print(&self, user: &str) {
+        let user_total = format!("total time = {}", duration_hhmmss(self.total_time()));
+        let user_disp = format!("{}:", user);
+        println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
+        
+        for day in &self.days {
+            day.print_day_total();
+            day.print_day_sessions();
+        }
+    }
 }
 
 pub type Players = HashMap<String, PlayerData>;
@@ -151,51 +187,24 @@ pub type Players = HashMap<String, PlayerData>;
 #[derive(Debug, Clone)]
 pub struct GameInfo {
     pub players: Players,
-    pub tx: Sender<PlayerEvent>,
-    rx: Receiver<PlayerEvent>,
 }
 
 impl GameInfo {
     pub fn new() -> Self { 
-        let (tx, rx) = flume::unbounded();
-        Self { players: Players::new(), tx: tx, rx: rx } 
+        let info = Self { players: Players::new(), };
+        info
     }
 
+
     pub fn add_event(&mut self, event: PlayerEvent) {
-        let player_data = self.players.entry(event.name.clone()).or_insert(PlayerData::new());
+        let player_data = self.players.entry(event.name.clone()).or_insert(PlayerData::new(&event.name));
         player_data.add_event(event);
     }
 
     pub fn print_players(self) {
         for (user, player_data) in &self.players {
-            let user_total = format!("total time = {}", duration_hhmmss(player_data.total_time()));
-            let user_disp = format!("{}:", user);
-            println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
-            
-            for day in &player_data.days {
-                let daily_total = format!("  {} - daily total = {}", day.date, duration_hhmmss(day.total_time));
-                println!("{}", Color::Green.paint(daily_total));
-                let y = &player_data.sessions[day.range()];
-                for session in y {
-                    println!("      {}", session);
-                }
-            }
-        }
-    
-    }
-
-    pub async fn rx_thing(mut self) {
-        loop {
-            tokio::select! {
-                details = self.rx.recv_async() => match details {
-                    Ok(event) => {
-                        self.add_event(event);
-                    },
-                    Err(_) => todo!(),
-                }
-
-            }
-        }
+            player_data.print(user);
+        }    
     }
 }
 
