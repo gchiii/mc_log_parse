@@ -140,8 +140,8 @@ impl PlayerData {
         };
         self.total_time = self.total_time + session.duration();
         match day.add_session(session) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+            Ok(_) => (),
+            Err(_) => (),
         }
     }
 
