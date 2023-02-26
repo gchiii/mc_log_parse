@@ -54,7 +54,7 @@ pub struct PlayerDay {
 impl PlayerDay {
     pub fn new(date: NaiveDate) -> Self {
         Self {
-            date: date,
+            date,
             sessions: Vec::<Session>::new(),
             total_time: Duration::zero(),
         }
@@ -139,9 +139,7 @@ impl PlayerData {
             self.days.last_mut().expect("msg")
         };
         self.total_time = self.total_time + session.duration();
-        match day.add_session(session) {
-            Ok(_) => (),
-            Err(_) => (),
+        if day.add_session(session).is_ok() {
         }
     }
 
@@ -187,8 +185,7 @@ pub struct GameInfo {
 
 impl GameInfo {
     pub fn new() -> Self {
-        let info = Self { players: Players::new(), };
-        info
+        Self { players: Players::new(), }
     }
 
 
@@ -198,9 +195,15 @@ impl GameInfo {
     }
 
     pub fn print_players(self) {
-        for (_user, player_data) in &self.players {
+        for player_data in self.players.values() {
             player_data.print();
         }
+    }
+}
+
+impl Default for GameInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use nom::bytes::complete::*;
-use nom::character::{complete::*};
-use nom::{combinator::*, Or};
+use nom::character::complete::*;
+use nom::combinator::*;
 use nom::branch::alt;
 use nom::sequence::{separated_pair, delimited, terminated, tuple};
 use nom::IResult;
@@ -38,10 +38,6 @@ impl PlayerEvent {
 
 impl PartialEq for PlayerEvent {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
-    }
-
-    fn ne(&self, other: &Self) -> bool {
         self.name == other.name && self.action == other.action && self.timestamp == other.timestamp
     }
 }
@@ -89,19 +85,6 @@ pub fn parse_log_header(input: &str) -> IResult<&str, LogHeader> {
         Ok((x, (t, b))) => {
             Ok((x, LogHeader{timestamp: t, _tag: b}))
         },
-        Err(x) => Err(x),
-    }
-}
-
-fn parse_joined(input: &str) -> IResult<&str, PlayerAction> {
-    match tag("joined")(input) {
-        Ok((i, _)) => Ok((i,PlayerAction::Connect)),
-        Err(x) => Err(x),
-    }
-}
-fn parse_left(input: &str) -> IResult<&str, PlayerAction> {
-    match tag("left")(input) {
-        Ok((i, _)) => Ok((i,PlayerAction::Disconnect)),
         Err(x) => Err(x),
     }
 }
