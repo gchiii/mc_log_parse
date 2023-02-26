@@ -52,12 +52,12 @@ pub struct PlayerDay {
 }
 
 impl PlayerDay {
-    pub fn new(date: NaiveDate) -> Self { 
-        Self { 
+    pub fn new(date: NaiveDate) -> Self {
+        Self {
             date: date,
-            sessions: Vec::<Session>::new(), 
+            sessions: Vec::<Session>::new(),
             total_time: Duration::zero(),
-        } 
+        }
     }
 
     pub fn add_session(&mut self, session: Session) -> Result<(), Session> {
@@ -73,7 +73,7 @@ impl PlayerDay {
     pub fn print_day_total(&self) {
         let daily_total = format!("  {} - daily total = {}", self.date, duration_hhmmss(self.total_time));
         let thing = Color::Green.paint(daily_total);
-        println!("{}", thing);        
+        println!("{}", thing);
     }
 
     pub fn print_day_sessions(&self) {
@@ -111,13 +111,13 @@ pub struct PlayerData {
 }
 
 impl PlayerData {
-    pub fn new(name: &str) -> Self { 
-        Self { 
+    pub fn new(name: &str) -> Self {
+        Self {
             name: name.to_string(),
-            events: Events::new(), 
-            days: Vec::new(), 
+            events: Events::new(),
+            days: Vec::new(),
             total_time: Duration::zero(),
-        } 
+        }
     }
 
     fn add_day(&mut self, date: NaiveDate) {
@@ -132,7 +132,7 @@ impl PlayerData {
             if self.days.is_empty() {
                 self.add_day(date)
             }
-    
+
             if self.days.last().expect("wow, where is it").date < date {
                 self.add_day(date)
             }
@@ -148,8 +148,8 @@ impl PlayerData {
     /// Set the player data's events.
     pub fn add_event(&mut self, event: PlayerEvent) {
         match event.action {
-            PlayerAction::Joined => self.events.push(event),
-            PlayerAction::Left => {
+            PlayerAction::Connect => self.events.push(event),
+            PlayerAction::Disconnect => {
                 if let Some(start) = self.events.pop() {
                     let session: Session = Session::build(&start, &event);
                     self.add_session(session);
@@ -170,7 +170,7 @@ impl PlayerData {
         let user_total = format!("total time = {}", duration_hhmmss(self.total_time()));
         let user_disp = format!("{}:", self.name);
         println!("{} {}", Color::Yellow.paint(user_disp), Color::Red.paint(user_total));
-        
+
         for day in &self.days {
             day.print_day_total();
             day.print_day_sessions();
@@ -186,7 +186,7 @@ pub struct GameInfo {
 }
 
 impl GameInfo {
-    pub fn new() -> Self { 
+    pub fn new() -> Self {
         let info = Self { players: Players::new(), };
         info
     }
@@ -200,7 +200,7 @@ impl GameInfo {
     pub fn print_players(self) {
         for (_user, player_data) in &self.players {
             player_data.print();
-        }    
+        }
     }
 }
 
